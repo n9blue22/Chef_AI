@@ -1,7 +1,8 @@
-from collections.abc import AsyncIterator
+import time
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from supabase import AsyncClient
 
@@ -30,6 +31,7 @@ from app.services.vision.gemini import GeminiVisionProvider
 
 API_V1_PREFIX = "/api/v1"
 SHARED_HTTP_TIMEOUT_SEC = 15.0  # mặc định cho PostgREST user; Auth/HIBP tự đặt timeout riêng theo request
+PROCESS_TIME_HEADER = "X-Process-Time"  # mili giây xử lý trong server — trừ ra khỏi độ trễ đo ở client là phần mạng
 
 
 @asynccontextmanager
@@ -64,6 +66,15 @@ async def create_ai_services(supabase: AsyncClient, admin: AsyncClient, catalog:
     )
 
 
+async def add_process_time_header(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
+    """Gắn X-Process-Time (ms, tới lúc có response) cho phản hồi API; web tĩnh không gắn."""
+    started = time.perf_counter()
+    response = await call_next(request)
+    if request.url.path.startswith(API_V1_PREFIX):
+        response.headers[PROCESS_TIME_HEADER] = f"{(time.perf_counter() - started) * 1000:.1f}"
+    return response
+
+
 def create_app(settings: Settings) -> FastAPI:
     """FastAPI app: CORS theo domain cụ thể (có cookie), router, handler lỗi, web tĩnh (nếu có bản dựng)."""
     application = FastAPI(title="Chef AI API", description="FastAPI backend cho app Chef AI", version="1.0.0", lifespan=lifespan)
@@ -71,8 +82,10 @@ def create_app(settings: Settings) -> FastAPI:
     application.add_middleware(
         CORSMiddleware, allow_origins=list(settings.cors_origins), allow_credentials=True,
         allow_methods=["GET", "POST", "PATCH", "DELETE"], allow_headers=["Authorization", "Content-Type"],
-        expose_headers=["Retry-After"],  # web đọc được số giây chờ khi 429 (mặc định trình duyệt giấu header này)
+        # web đọc được số giây chờ khi 429 và thời gian xử lý (mặc định trình duyệt giấu các header này)
+        expose_headers=["Retry-After", PROCESS_TIME_HEADER],
     )
+    application.middleware("http")(add_process_time_header)  # bọc ngoài cùng: cả 404/429 của API cũng có header
     application.include_router(health_router, prefix=API_V1_PREFIX, dependencies=[Depends(limit_ip("default_ip"))])
     application.include_router(auth_router, prefix=API_V1_PREFIX)
     for user_data_router in (profile_router, pantry_router, logs_router, saved_router):

@@ -1,5 +1,6 @@
 """Web tĩnh cùng địa chỉ với API: fallback SPA chỉ cho đường dẫn không đuôi, /api/* và file thiếu → 404 JSON,
-/docs, /openapi.json, /api/v1/health không bị mount "/" che, cache + gzip đúng loại file."""
+/docs, /openapi.json, /api/v1/health không bị mount "/" che, cache + gzip đúng loại file,
+chỉ phản hồi API (không phải web) có X-Process-Time."""
 
 from pathlib import Path
 
@@ -10,7 +11,7 @@ from app.api.deps import get_rate_limiter
 from app.api.v1 import health
 from app.core.config import get_settings
 from app.core.web_static import CACHE_IMMUTABLE, CACHE_REVALIDATE, mount_web
-from app.main import create_app
+from app.main import PROCESS_TIME_HEADER, create_app
 from app.services.rate_limit import RateLimiter
 
 INDEX_HTML = "<!doctype html><title>Chef AI</title><div id=root></div>"
@@ -102,3 +103,14 @@ def test_without_build_nothing_is_mounted(tmp_path: Path) -> None:
     mount_web(app, tmp_path / "khong-co-dist")
     response = TestClient(app).get("/recipe/123")
     assert response.status_code == 404 and response.json() == NOT_FOUND
+
+
+@pytest.mark.parametrize("path", ["/api/v1/health", "/api/v1/khong-co"])
+def test_api_responses_carry_process_time_header_readable_by_browser(client: TestClient, path: str) -> None:
+    response = client.get(path, headers={"Origin": "http://localhost:8081"})  # DEV_FRONTEND_URL, luôn trong CORS
+    assert float(response.headers[PROCESS_TIME_HEADER]) >= 0
+    assert PROCESS_TIME_HEADER.lower() in response.headers["access-control-expose-headers"].lower()
+
+
+def test_web_static_has_no_process_time_header(client: TestClient) -> None:
+    assert PROCESS_TIME_HEADER not in client.get("/recipe/123").headers
