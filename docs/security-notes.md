@@ -1,6 +1,6 @@
 # Ghi chú bảo mật phụ thuộc
 
-Kiểm 2026-11-06, chỉ đọc — **chưa nâng gói nào**.
+Kiểm 2026-11-06. Chỉ nâng cận dưới của Pillow (mục "Pillow — đã xử lý"); các gói khác chưa nâng.
 
 ## Backend — pip-audit
 
@@ -18,8 +18,8 @@ uvx pip-audit -r <pip freeze của backend/venv> --no-deps   # phiên bản đan
 | `requirements.txt` resolve mới (114 gói, Pillow 13.0.0, certifi 2026.10.23) | 0 cảnh báo |
 | venv local (`pip freeze`) | **61 cảnh báo / 6 gói** — bảng dưới |
 
-`requirements.txt` dùng `>=` nên image lấy bản mới nhất **tại lúc dựng**. Image dựng hôm nay sẽ sạch; image đang chạy
-(dựng trước khi Pillow 13.0.0 ra) có thể còn các lỗi Pillow dưới đây — **chưa kiểm được trong image**.
+`requirements.txt` dùng `>=` nên image lấy bản mới nhất **tại lúc dựng**. Image đang chạy (dựng trước khi Pillow 13.0.0
+ra) có thể còn các lỗi Pillow dưới đây — **chưa kiểm được trong image**.
 
 ### Cảnh báo ở venv local: có trên đường chạy thật không, khai thác từ xa được không
 
@@ -32,10 +32,40 @@ uvx pip-audit -r <pip freeze của backend/venv> --no-deps   # phiên bản đan
 | filelock 4.0.3 → 4.2.1 | 14 | Không với request. `huggingface_hub`/`torch` khoá file cục bộ; image đặt `HF_HUB_OFFLINE=1`. | Không — cần quyền ghi file trên máy. |
 | setuptools 84.0.0 → 84.1.0 | 1 | Không — chỉ lúc cài wheel trên Windows. | Không. |
 
-Đề xuất (chưa làm, chờ duyệt):
-1. Dựng lại image để lấy Pillow ≥ 13.0.0 và kiểm `pip show pillow` trong image; cân nhắc ghim `pillow>=13.0.0`.
-2. Giới hạn định dạng: `Image.open(..., formats=["JPEG", "PNG", "WEBP"])` — chặn cả lớp lỗi TIFF/JPEG 2000/BMP/MSP/XBM
-   kể cả khi Pillow sau này có lỗi mới. Cần kiểm định dạng ảnh mà frontend thật sự gửi (HEIC từ iPhone?) trước khi chốt.
+## Pillow — đã xử lý
+
+Lỗ hổng: 39 advisory ở Pillow < 13.0.0 (bảng trên). Phần lọt tới được từ `POST /api/v1/recognize` nằm ở các bộ giải mã
+TIFF, JPEG 2000, BMP/MSP RLE, XBM, GIF — vì `Image.open` trước đây mở **mọi** định dạng Pillow biết (~40).
+
+Đã làm:
+1. **Giới hạn định dạng** (`backend/app/services/upload_image.py`, `ALLOWED_IMAGE_FORMATS = ("JPEG", "PNG", "WEBP")`):
+   `Image.open(..., formats=...)` không thử bộ giải mã nào khác → TIFF/BMP/GIF/JPEG 2000… trả **415** JSON, không tới
+   vision. MPO (JPEG nhiều khung của một số điện thoại Android) vẫn qua vì Pillow mở nó bằng bộ "JPEG". Ảnh hỏng (cắt
+   cụt, sai CRC, rác sau header) ra `UnidentifiedImageError`/`OSError` → 415. Giới hạn điểm ảnh **có sẵn từ trước**:
+   `MAX_IMAGE_PIXELS = 50_000_000` → 413, kiểm từ header trước khi giải nén. Test: `test_ai_routes.py::
+   test_recognize_decodes_only_allowed_formats` (ảnh TIFF/BMP hợp lệ do Pillow tự tạo → 415; JPEG/PNG/WebP → 200).
+2. **`pillow>=13.0.0`** trong `requirements.txt`: nội dung file đổi → Docker không dùng lại layer cũ, pip buộc lấy bản đã vá.
+   pip-audit lại sau khi đổi: `requirements.txt` (resolve ra pillow 13.0.0) và `requirements-ml.txt` đều 0 cảnh báo.
+
+Xác nhận trong image sau khi dựng (chưa dựng):
+
+```
+docker run --rm <image> python -c "import PIL; print(PIL.__version__)"   # phải >= 13.0.0
+```
+
+### HEIC (ảnh iPhone)
+
+Backend **chưa bao giờ** đọc được HEIC: Pillow (12.3 lẫn 13.0) không có plugin HEIF, image không cài `pillow-heif` →
+HEIC luôn trả 415, trước và sau thay đổi này. Frontend (đọc mã, chưa thử máy thật):
+- Chụp bằng camera trong app (`expo-camera`, `takePictureAsync`) → JPEG. Không ảnh hưởng.
+- Chọn từ thư viện trên **iOS** (`expo-image-picker` 57, `quality: 0.6`, `preferredAssetRepresentationMode` mặc định
+  `current`): `ImageUtils.readDataAndFileExtension` giữ **nguyên dữ liệu** với ảnh HEIC (cũng như TIFF, BMP, WebP, AVIF, GIF),
+  chỉ ảnh "khác" mới nén lại thành JPEG. Frontend luôn gắn nhãn `photo.jpg` / `image/jpeg` bất kể nội dung.
+  → **Ảnh HEIC chọn từ thư viện iPhone gửi lên dưới dạng HEIC và bị 415** — lỗi có từ trước, chưa sửa. Hướng sửa (chờ duyệt):
+  phía app đặt `preferredAssetRepresentationMode: Compatible` (iOS tự chuyển sang JPEG), hoặc phía backend cài `pillow-heif`.
+- Chọn từ thư viện trên **Android**: `CompressionImageExporter` nén lại thành JPEG/PNG khi `quality < 1`.
+- **Web**: gửi nguyên file người dùng chọn (`ExponentImagePicker.web.ts`: `FileReader`/`createObjectURL`, không nén lại; `quality` không tác dụng).
+- Định dạng **mới bị chặn** so với trước (trước đây qua được): GIF, AVIF, BMP, TIFF… chọn từ thư viện iOS hoặc web.
 
 ## Frontend — npm audit
 
