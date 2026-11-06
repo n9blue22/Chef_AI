@@ -14,6 +14,9 @@ JPEG_QUALITY = 85
 MAX_IMAGE_PIXELS = 50_000_000
 Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS  # Pillow: vượt → DecompressionBombWarning, vượt 2 lần → DecompressionBombError
 PIXELS_TOO_LARGE_MESSAGE = "Ảnh có độ phân giải quá lớn"
+# Chỉ giải mã đúng các định dạng app dùng: Pillow mặc định mở ~40 định dạng (TIFF, BMP, JPEG 2000…) — mỗi bộ giải mã là
+# thêm bề mặt tấn công. Ngoài danh sách → UnidentifiedImageError → 415. "JPEG" gồm cả MPO (ảnh nhiều khung của điện thoại).
+ALLOWED_IMAGE_FORMATS = ("JPEG", "PNG", "WEBP")
 
 
 class InvalidImageError(Exception):
@@ -25,13 +28,13 @@ class ImageTooLargeError(Exception):
 
 
 def prepare_image_for_vision(data: bytes) -> bytes:
-    """Ảnh bất kỳ (JPEG/PNG/WebP...) → JPEG cạnh dài ≤ MAX_SIDE_PX, đúng chiều theo EXIF."""
+    """Ảnh JPEG/PNG/WebP → JPEG cạnh dài ≤ MAX_SIDE_PX, đúng chiều theo EXIF."""
     if len(data) > MAX_UPLOAD_BYTES:
         raise ImageTooLargeError(f"Ảnh tối đa {MAX_UPLOAD_BYTES // (1024 * 1024)} MB")
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("error", Image.DecompressionBombWarning)  # cảnh báo cũng coi là lỗi
-            image = Image.open(io.BytesIO(data))  # chỉ đọc header, chưa giải nén điểm ảnh
+            image = Image.open(io.BytesIO(data), formats=ALLOWED_IMAGE_FORMATS)  # chỉ đọc header, chưa giải nén
             _reject_huge_resolution(image)
             image = ImageOps.exif_transpose(image).convert("RGB")  # điện thoại lưu ảnh xoay bằng cờ EXIF
     except (Image.DecompressionBombError, Image.DecompressionBombWarning) as error:

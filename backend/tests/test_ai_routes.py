@@ -125,9 +125,9 @@ def no_db(monkeypatch: pytest.MonkeyPatch):
     app.dependency_overrides.clear()
 
 
-def png_bytes(width: int = 64, height: int = 48) -> bytes:
+def image_bytes(width: int = 64, height: int = 48, fmt: str = "PNG") -> bytes:
     output = io.BytesIO()
-    Image.new("RGB", (width, height), "red").save(output, format="PNG")
+    Image.new("RGB", (width, height), "red").save(output, format=fmt)
     return output.getvalue()
 
 
@@ -137,15 +137,15 @@ def post_image(client: TestClient, data: bytes):
 
 def test_recognize_resizes_before_vision_and_maps_ingredients() -> None:
     vision = FakeVision(Detected(ingredients=["ức gà"], uncertain=[]))
-    response = post_image(client_with(vision=vision), png_bytes(3000, 2000))
+    response = post_image(client_with(vision=vision), image_bytes(3000, 2000))
 
     assert response.status_code == 200 and response.json()["accepted_ids"] == [CHICKEN_ID]
     assert max(Image.open(io.BytesIO(vision.received)).size) == MAX_SIDE_PX
 
 
 def test_recognize_distinguishes_vision_error_from_no_food() -> None:
-    failed = post_image(client_with(vision=FakeVision(VisionUnavailableError("timeout"))), png_bytes())
-    no_food = post_image(client_with(vision=FakeVision(Detected(ingredients=[], uncertain=[]))), png_bytes())
+    failed = post_image(client_with(vision=FakeVision(VisionUnavailableError("timeout"))), image_bytes())
+    no_food = post_image(client_with(vision=FakeVision(Detected(ingredients=[], uncertain=[]))), image_bytes())
 
     assert failed.status_code == 503 and failed.json()["detail"] == "Không nhận diện được ảnh, thử lại"
     assert no_food.status_code == 422
@@ -156,6 +156,22 @@ def test_recognize_rejects_non_image_and_oversized_upload() -> None:
 
     assert post_image(client, b"not an image").status_code == 415
     assert post_image(client, b"0" * (MAX_UPLOAD_BYTES + 1)).status_code == 413
+
+
+JPEG, PNG = image_bytes(fmt="JPEG"), image_bytes(fmt="PNG")
+
+
+@pytest.mark.parametrize(("data", "status"), [
+    (JPEG, 200), (PNG, 200), (image_bytes(fmt="WEBP"), 200),
+    (image_bytes(fmt="TIFF"), 415), (image_bytes(fmt="BMP"), 415),  # hợp lệ, Pillow đọc được, nhưng ngoài danh sách
+    (JPEG[: len(JPEG) // 2], 415), (PNG[: len(PNG) // 2], 415),  # file bị cắt cụt
+], ids=["jpeg", "png", "webp", "tiff", "bmp", "jpeg-hong", "png-hong"])
+def test_recognize_decodes_only_allowed_formats(data: bytes, status: int) -> None:
+    vision = FakeVision(Detected(ingredients=["ức gà"], uncertain=[]))
+    response = post_image(client_with(vision=vision), data)
+
+    assert response.status_code == status and isinstance(response.json(), dict)
+    assert (vision.received is not None) == (status == 200)  # ảnh bị từ chối không bao giờ tới vision
 
 
 def test_suggest_rejects_unknown_allergen_slug_instead_of_silently_not_filtering(
@@ -243,7 +259,7 @@ def test_ai_endpoints_require_login() -> None:
     app.dependency_overrides[get_jwt_verifier] = lambda: JwtVerifier(get_settings().supabase_url)
     client = TestClient(app)
     responses = [
-        client.post("/api/v1/recognize", files={"image": ("p.png", png_bytes(), "image/png")}),
+        client.post("/api/v1/recognize", files={"image": ("p.png", image_bytes(), "image/png")}),
         client.post("/api/v1/recipes/suggest", json={"ingredient_ids": [CHICKEN_ID], "diet_type": "omnivore"}),
         client.post("/api/v1/recipes/7/image", headers={"Authorization": "Bearer khong-phai-jwt"}),
     ]
