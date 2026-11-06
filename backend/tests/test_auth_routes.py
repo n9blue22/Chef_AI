@@ -144,6 +144,13 @@ def test_forgot_password_answers_the_same_for_any_email(fake_auth: FakeSupabaseA
     assert post("/forgot-password", {"email": "khong-ton-tai@example.com"}).json() == {"message": FORGOT_MESSAGE}
 
 
+def test_forgot_password_link_points_to_frontend_reset_page(fake_auth: FakeSupabaseAuth) -> None:
+    post("/forgot-password", {"email": "co-that@example.com"})
+
+    assert fake_auth.calls[0][0] == "/recover"
+    assert fake_auth.calls[0][1]["redirect_to"] == get_settings().frontend_url + "/reset-password"
+
+
 def test_login_is_rate_limited_per_ip(fake_auth: FakeSupabaseAuth) -> None:
     body = {"email": "a@example.com", "password": "Sai-mat-khau-1!"}
     statuses = [post("/login", body).status_code for _ in range(6)]
