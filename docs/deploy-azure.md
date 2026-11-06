@@ -153,6 +153,18 @@ Rủi ro nếu đặt sai:
   đếm của người khác (đúng cảnh báo trong tài liệu Azure ở trên và feature-spec mục 7.12).
 - **Có >1 Envoy/bản:** không ảnh hưởng tới dải tin cậy; chỉ ảnh hưởng bộ đếm trong RAM (mục 3).
 
+### 4.1. Giá trị đang dùng và IP proxy đã thấy
+
+```
+FORWARDED_ALLOW_IPS=100.100.0.0/24
+```
+
+- IP proxy (Envoy) đã thấy trong access log: `100.100.0.65`, `100.100.0.187`, `100.100.1.45`.
+- Lượt request đầu tiên sau khi app thức (scale từ 0 lên) có thể hiện IP proxy thay vì IP client trong log.
+- ⚠️ `100.100.1.45` **nằm ngoài** `100.100.0.0/24` (dải này chỉ gồm `100.100.0.0`–`100.100.0.255`). Request đi qua
+  proxy đó sẽ không được tin header → bị đếm rate limit theo IP proxy, chung cho mọi người. Nếu muốn tin cả nó:
+  `100.100.0.0/23` (gồm `100.100.0.0`–`100.100.1.255`). Chưa đổi — chờ anh quyết.
+
 ---
 
 ## 5. Dựng, tag, push image tới ACR bằng docker (không dùng `az acr build`)
