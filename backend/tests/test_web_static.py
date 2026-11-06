@@ -30,7 +30,8 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     _write(tmp_path, "index.html", INDEX_HTML)
     _write(tmp_path, BUNDLE_PATH, BUNDLE_JS)
     _write(tmp_path, "favicon.ico", "ico")
-    app = create_app(get_settings())
+    _write(tmp_path, ".env", "SECRET=1")  # file ẩn có thật trong dist vẫn không được phục vụ
+    app =create_app(get_settings())
     mount_web(app, tmp_path)
     limiter = RateLimiter(admin=None)
     app.dependency_overrides[get_rate_limiter] = lambda: limiter
@@ -58,6 +59,12 @@ def test_unknown_api_paths_return_json_404_not_index(client: TestClient, path: s
 
 @pytest.mark.parametrize("path", ["/_expo/static/js/web/khong-co.js", "/styles.css", "/assets/logo.png", "/a/b.map"])
 def test_missing_files_with_extension_return_404_not_index(client: TestClient, path: str) -> None:
+    response = client.get(path)
+    assert response.status_code == 404 and response.json() == NOT_FOUND
+
+
+@pytest.mark.parametrize("path", ["/.git/config", "/.env", "/a/.hidden", "/.well-known/x", "/recipe/.env"])
+def test_dot_segments_return_404_not_index(client: TestClient, path: str) -> None:
     response = client.get(path)
     assert response.status_code == 404 and response.json() == NOT_FOUND
 

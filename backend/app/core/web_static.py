@@ -31,6 +31,8 @@ class SpaStaticFiles(StaticFiles):
         url_path = path.replace(os.sep, "/")  # StaticFiles đưa vào đường dẫn kiểu hệ điều hành
         if url_path == API_PATH or url_path.startswith(f"{API_PATH}/"):
             raise HTTPException(status_code=404)  # API gõ sai → 404 JSON như cũ, không bao giờ trả HTML
+        if any(part.startswith(".") for part in PurePosixPath(url_path).parts):
+            raise HTTPException(status_code=404)  # /.git/config, /.env, /a/.hidden: dò file ẩn → 404, không trả SPA
         try:
             response = await super().get_response(path, scope)
         except HTTPException as error:
