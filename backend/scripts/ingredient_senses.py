@@ -11,14 +11,26 @@ from app.services.ingredient_matching import normalize_exact
 
 ALLERGEN_KEYWORDS: dict[str, tuple[str, ...]] = {
     "egg": ("trứng", "egg", "mayonnaise", "mayo"),
-    "dairy": ("sữa", "bơ", "phô mai", "kem", "milk", "cheese", "butter", "cream", "yogurt", "buttermilk"),
-    "wheat": ("bột mì", "bánh mì", "mì", "bột chiên", "flour", "bread", "breadcrumb", "pasta", "noodle", "tortilla"),
-    "soy": ("đậu nành", "đậu hũ", "đậu phụ", "tàu hũ", "tương", "chao", "soy", "tofu", "miso"),
+    "dairy": (
+        "sữa", "bơ", "phô mai", "kem", "milk", "cheese", "butter", "cream", "yogurt", "buttermilk",
+        "nutella",
+    ),
+    "wheat": (
+        "bột mì", "bánh mì", "mì", "bột chiên", "bột bánh bao", "flour", "bread", "breadcrumb", "pasta", "noodle",
+        "tortilla", "macaroni", "spaghetti", "penne", "crouton", "cracker",
+    ),
+    "soy": ("đậu nành", "đậu hũ", "đậu phụ", "tàu hũ", "tương", "chao", "soy", "tofu", "miso", "nutella"),
     "peanut": ("đậu phộng", "lạc", "peanut"),
-    "tree_nuts": ("hạt điều", "óc chó", "hạnh nhân", "almond", "walnut", "pecan", "cashew", "hazelnut", "pistachio"),
-    "sesame": ("mè", "vừng", "sesame", "tahini"),
+    "tree_nuts": (
+        "hạt điều", "óc chó", "hạnh nhân", "almond", "walnut", "pecan", "cashew", "hazelnut", "pistachio",
+        "nut", "nutella",  # "nut" khớp cả "nuts" (pattern cho phép -s); không khớp peanut/coconut/nutmeg
+    ),
+    "sesame": ("mè", "vừng", "sesame", "tahini", "hummus"),
     "fish": ("cá", "mắm", "fish", "anchovy", "anchovies", "salmon", "tuna"),
-    "shellfish": ("tôm", "cua", "ghẹ", "tép", "shrimp", "prawn", "crab", "lobster"),
+    "shellfish": (
+        "tôm", "cua", "ghẹ", "tép", "shrimp", "prawn", "crab", "lobster",
+        "mắm ruốc", "ruốc biển",  # không dùng "ruốc" trơn: miền Bắc "ruốc" = chà bông thịt
+    ),
     "molluscs": ("mực", "nghêu", "sò", "hàu", "ốc", "hến", "dầu hào", "squid", "clam", "oyster", "mussel", "scallop"),
 }
 DAIRY_SLUG = "dairy"
@@ -48,6 +60,17 @@ _NON_DAIRY_LOOKALIKE = re.compile(
 AMBIGUOUS_BO = "bơ"
 AVOCADO_NAME = "quả bơ"
 _AVOCADO_DISH = re.compile(r"\b(?:sinh tố|chè|kem|cheesecake|quả|trái) bơ\b|\bbơ viên\b|\btrái cây\b")
+# "spaghetti squash" là bí, không phải mì.
+_NON_WHEAT_LOOKALIKE = re.compile(r"\bspaghetti squash\b")
+# Theo từng slug: cụm "trông giống mà không phải", bỏ đi trước khi dò.
+# Chỉ bỏ khi dò đúng slug đó — "sữa đậu nành" vẫn phải ra soy, "bơ đậu phộng" ra peanut.
+_LOOKALIKE_BY_SLUG = {DAIRY_SLUG: _NON_DAIRY_LOOKALIKE, "wheat": _NON_WHEAT_LOOKALIKE}
+# "nuts", "mixed nuts", "chopped nuts": không rõ loại hạt, có thể là đậu phộng → gắn thêm peanut (tree_nuts đã khớp "nut").
+# Tên có loại hạt cụ thể ("pine nuts", "macadamia nuts"...) thì không.
+PEANUT_SLUG = "peanut"
+_GENERIC_NUTS = re.compile(
+    r"(?<!pine )(?<!macadamia )(?<!brazil )(?<!cashew )(?<!pistachio )(?<!pecan )(?<!almond )(?<!betel )\bnuts?\b"
+)
 # "dầu hào chay", "vegetarian worcestershire sauce": bản chay của sản phẩm động vật.
 _VEGETARIAN_VERSION = re.compile(r"\b(?:chay|vegetarian|vegan)\b")
 
@@ -99,8 +122,10 @@ def guess_allergen_ids(names: list[str], allergen_id_by_slug: dict[str, int]) ->
     for name in names:
         text = _without_segment_tep(name)
         for slug, pattern in _ALLERGEN_PATTERNS.items():
-            # Chỉ bỏ cụm "không phải sữa" khi dò dairy — "sữa đậu nành" vẫn phải ra soy, "bơ đậu phộng" ra peanut.
-            searched = _NON_DAIRY_LOOKALIKE.sub(" ", text) if slug == DAIRY_SLUG else text
+            lookalike = _LOOKALIKE_BY_SLUG.get(slug)
+            searched = lookalike.sub(" ", text) if lookalike else text
             if pattern.search(searched):
                 allergen_ids.add(allergen_id_by_slug[slug])
+        if _GENERIC_NUTS.search(text):
+            allergen_ids.add(allergen_id_by_slug[PEANUT_SLUG])
     return allergen_ids
