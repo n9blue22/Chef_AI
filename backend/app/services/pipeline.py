@@ -1,7 +1,7 @@
 """Pipeline gợi ý công thức (feature-spec mục 4): vision → normalize → search_recipes → LLM adapt → validate.
 
 Hai bước tách theo 2 endpoint vì giữa chúng user xác nhận nguyên liệu (bước [5]):
-- recognize_ingredients: ảnh → nguyên liệu đã map vào bảng ingredients
+- recognize_with_cache: ảnh → nguyên liệu đã map vào bảng ingredients (cache đầu ra vision, xem scan_cache.py)
 - suggest_recipes: nguyên liệu đã xác nhận + diet/dị ứng → công thức (adapted hoặc original)
 """
 
@@ -30,8 +30,9 @@ from app.services.llm.recipe_adaptation import ADAPT_RECIPE_SYSTEM_PROMPT, Adapt
 from app.services.pantry_basics import pantry_basic_ids, restore_pantry_basics
 from app.services.recipe_repository import OriginalRecipe, load_original_recipes, search_recipes
 from app.services.recipe_results import SuggestedRecipe, adapted_result, original_result, rules_by_ingredient
+from app.services.scan_cache import ScanResultCache, scan_cache_key
 from app.services.validation import ValidationContext, validate_adapted_recipe, with_rest_time
-from app.services.vision.provider import VisionProvider, VisionUnavailableError
+from app.services.vision.provider import Detected, VisionProvider, VisionUnavailableError
 
 logger = logging.getLogger(__name__)
 
@@ -65,15 +66,51 @@ class SuggestRequest:
     servings: int | None = None  # None = giữ khẩu phần công thức gốc
 
 
+@dataclass(frozen=True)
+class ScanRequest:
+    """1 lượt quét: upload = bytes gốc (làm khoá cache), prepared = ảnh đã kiểm + thu nhỏ để gửi vision."""
+
+    user_id: str
+    upload: bytes
+    prepared: bytes
+    mime_type: str
+
+
+async def recognize_with_cache(
+    scan: ScanRequest, vision: VisionProvider, catalog_cache: IngredientCatalogCache, scan_cache: ScanResultCache,
+    consume_quota: Callable[[], Awaitable[None]],
+) -> tuple[RecognizedIngredients, bool]:
+    """(kết quả, trúng cache?). Trúng: không trừ lượt ngày, không gọi vision, chuẩn hoá lại theo danh mục hiện tại.
+    Trượt: trừ lượt TRƯỚC khi gọi vision (vision lỗi vẫn mất lượt); chỉ lưu cache khi ra được kết quả."""
+    key = scan_cache_key(scan.user_id, scan.upload, vision.output_version())
+    cached = scan_cache.get(key)
+    if cached is not None:
+        return match_detected(cached, await catalog_cache.get()), True
+    await consume_quota()
+    detected = await run_vision(scan.prepared, scan.mime_type, vision)
+    result = match_detected(detected, await catalog_cache.get())  # rỗng / không khớp → NoUsable…, không vào cache
+    scan_cache.put(key, detected)
+    return result, False
+
+
 async def recognize_ingredients(
     image: bytes, mime_type: str, vision: VisionProvider, catalog: list[CatalogIngredient],
 ) -> RecognizedIngredients:
     """Ảnh → nguyên liệu đã map; VisionUnavailableError nếu vision lỗi, NoUsableIngredientsError nếu không có gì."""
+    return match_detected(await run_vision(image, mime_type, vision), catalog)
+
+
+async def run_vision(image: bytes, mime_type: str, vision: VisionProvider) -> Detected:
+    """Gọi vision; lỗi thì log rồi ném tiếp cho route trả 503."""
     try:
-        detected = await vision.detect_ingredients(image, mime_type)
+        return await vision.detect_ingredients(image, mime_type)
     except VisionUnavailableError:
         logger.exception("Vision không nhận diện được ảnh")
         raise
+
+
+def match_detected(detected: Detected, catalog: list[CatalogIngredient]) -> RecognizedIngredients:
+    """Tên vision trả → nguyên liệu trong danh mục; không có gì dùng được → NoUsableIngredientsError."""
     if not detected.ingredients and not detected.uncertain:
         raise NoUsableIngredientsError("Không thấy thực phẩm trong ảnh — chụp gần hơn hoặc chọn ảnh khác")
     normalizer = IngredientNormalizer(catalog)

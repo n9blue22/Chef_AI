@@ -6,7 +6,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
-from fastapi import APIRouter, Depends, FastAPI, File, Request, UploadFile
+from fastapi import APIRouter, Depends, FastAPI, File, Request, Response, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from supabase import AsyncClient
@@ -30,11 +30,13 @@ from app.services.rate_limit import RateLimiter
 from app.services.pipeline import (
     NoUsableIngredientsError,
     RecognizedIngredients,
+    ScanRequest,
     SuggestRequest,
-    recognize_ingredients,
+    recognize_with_cache,
     suggest_recipes,
 )
 from app.services.recipe_results import SuggestedRecipe
+from app.services.scan_cache import ScanResultCache
 from app.services.upload_image import (
     MAX_UPLOAD_BYTES,
     VISION_MIME,
@@ -47,6 +49,7 @@ from app.services.vision.provider import VisionProvider, VisionUnavailableError
 logger = logging.getLogger(__name__)
 
 MAX_SERVINGS = 20
+CACHE_HEADER = "X-Cache"  # /recognize: HIT | MISS
 
 # Lỗi nghiệp vụ → HTTP. Message None = trả str(lỗi) (đã viết cho user); 5xx dùng câu cố định, không lộ chi tiết.
 ERROR_RESPONSES: dict[type[Exception], tuple[int, str | None]] = {
@@ -60,7 +63,7 @@ ERROR_RESPONSES: dict[type[Exception], tuple[int, str | None]] = {
 
 router = APIRouter(tags=["ai"], responses=USER_ROUTE_ERRORS)
 # Cả 3 endpoint tốn quota AI thật → bắt buộc đăng nhập + rate limit theo user (services/rate_limit.py).
-recognize_user = limit_user("recognize", consume_daily=True)
+recognize_user = limit_user("recognize")  # quota ngày: chỉ trừ khi trượt cache, trước khi gọi Gemini (xem recognize)
 suggest_user = limit_user("suggest")  # quota ngày: kiểm trước, chỉ trừ khi gợi ý thành công (xem suggest)
 dish_image_user = limit_user("dish_image")
 
@@ -76,6 +79,7 @@ class AiServices:
     llm: LLMProvider
     image_gen: ImageGenProvider
     catalog: IngredientCatalogCache  # danh mục ingredients trong RAM, hết hạn sau vài phút
+    scan_cache: ScanResultCache  # đầu ra vision theo (user, ảnh, phiên bản) trong RAM
 
 
 def get_ai_services(request: Request) -> AiServices:
@@ -101,13 +105,20 @@ class DishImageBody(BaseModel):
 
 @router.post("/recognize", response_model=RecognizedIngredients, responses=error_responses(413, 415, 503))
 async def recognize(
-    image: UploadFile = File(...), services: AiServices = Depends(get_ai_services),
-    _user: CurrentUser = Depends(recognize_user),
+    response: Response, image: UploadFile = File(...), services: AiServices = Depends(get_ai_services),
+    user: CurrentUser = Depends(recognize_user), limiter: RateLimiter = Depends(get_rate_limiter),
 ) -> RecognizedIngredients:
-    """Ảnh (multipart, field "image") → nguyên liệu chắc chắn + chưa chắc để user xác nhận."""
-    prepared = await asyncio.to_thread(prepare_image_for_vision, await image.read(MAX_UPLOAD_BYTES + 1))
-    catalog = await services.catalog.get()
-    return await recognize_ingredients(prepared, VISION_MIME, services.vision, catalog)
+    """Ảnh (multipart, field "image") → nguyên liệu chắc chắn + chưa chắc để user xác nhận.
+    413/415 trước khi tra cache (không mất lượt); trúng cache không trừ lượt ngày, trượt thì trừ trước khi gọi Gemini."""
+    upload = await image.read(MAX_UPLOAD_BYTES + 1)
+    prepared = await asyncio.to_thread(prepare_image_for_vision, upload)
+    scan = ScanRequest(user.id, upload, prepared, VISION_MIME)
+    consume_quota = functools.partial(limiter.consume_daily, "recognize", user.id)
+    result, cache_hit = await recognize_with_cache(
+        scan, services.vision, services.catalog, services.scan_cache, consume_quota,
+    )
+    response.headers[CACHE_HEADER] = "HIT" if cache_hit else "MISS"
+    return result
 
 
 @router.post("/recipes/suggest", response_model=list[SuggestedRecipe])

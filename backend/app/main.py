@@ -27,6 +27,7 @@ from app.services.image_gen.cloudflare_flux import CloudflareFluxProvider
 from app.services.ingredient_normalizer import IngredientCatalogCache
 from app.services.llm.fallback import create_recipe_llm
 from app.services.rate_limit import RateLimiter
+from app.services.scan_cache import ScanResultCache
 from app.services.vision.gemini import GeminiVisionProvider
 
 API_V1_PREFIX = "/api/v1"
@@ -63,6 +64,7 @@ async def create_ai_services(supabase: AsyncClient, admin: AsyncClient, catalog:
         llm=create_recipe_llm(),
         image_gen=CloudflareFluxProvider(),
         catalog=catalog,
+        scan_cache=ScanResultCache(),
     )
 
 

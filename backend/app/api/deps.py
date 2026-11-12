@@ -53,16 +53,14 @@ async def require_user(
     return await verifier.verify(credentials.credentials)
 
 
-def limit_user(policy_name: str, consume_daily: bool = False) -> Callable[..., Awaitable[CurrentUser]]:
-    """Bắt đăng nhập + rate limit theo user_id (+ trừ quota ngày nếu consume_daily).
+def limit_user(policy_name: str) -> Callable[..., Awaitable[CurrentUser]]:
+    """Bắt đăng nhập + rate limit theo user_id (quota ngày do từng service tự trừ đúng lúc).
     Gọi 1 lần ở cấp module rồi dùng lại object trả về — FastAPI chỉ cache dependency theo object."""
 
     async def dependency(
         user: CurrentUser = Depends(require_user), limiter: RateLimiter = Depends(get_rate_limiter),
     ) -> CurrentUser:
         limiter.check(policy_name, f"user:{user.id}")
-        if consume_daily:
-            await limiter.consume_daily(policy_name, user.id)
         return user
 
     return dependency

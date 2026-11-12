@@ -22,6 +22,7 @@ from app.services.image_gen.provider import GeneratedImage, ImageGenProvider, Im
 from app.services.ingredient_matching import CatalogIngredient
 from app.services.ingredient_normalizer import IngredientCatalogCache
 from app.services.rate_limit import RateLimitedError
+from app.services.scan_cache import ScanResultCache
 from app.services.upload_image import MAX_SIDE_PX, MAX_UPLOAD_BYTES
 from app.services.vision.provider import Detected, VisionProvider, VisionUnavailableError
 
@@ -109,6 +110,7 @@ def client_with(vision: VisionProvider | None = None, image_gen: ImageGenProvide
     services = AiServices(
         supabase=None, admin=FakeStorageClient(bucket or FakeBucket(False)), vision=vision,
         embedder=embedder, llm=None, image_gen=image_gen, catalog=IngredientCatalogCache(client=None),
+        scan_cache=ScanResultCache(),
     )
     app.dependency_overrides[get_ai_services] = lambda: services
     app.dependency_overrides[get_rate_limiter] = lambda: limiter or FakeLimiter()
