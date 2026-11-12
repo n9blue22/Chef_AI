@@ -43,6 +43,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     admin = await create_admin_client(settings)
     app.state.admin = admin
     app.state.catalog = IngredientCatalogCache(app.state.supabase)
+    await app.state.catalog.warm_up()  # lỗi chỉ cảnh báo, không chặn khởi động
     app.state.ai_services = await create_ai_services(app.state.supabase, admin, app.state.catalog)
     app.state.rate_limiter = RateLimiter(admin)
     app.state.jwt_verifier = JwtVerifier(settings.supabase_url)

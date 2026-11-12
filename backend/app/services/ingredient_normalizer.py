@@ -1,5 +1,6 @@
 """Bước [4] workflow: map tên nguyên liệu thô (Việt/Anh, có thể kèm số lượng) về ingredient_id bằng fuzzy match."""
 
+import logging
 import re
 import time
 from collections import defaultdict
@@ -18,6 +19,8 @@ from app.services.ingredient_matching import (
     normalize_exact,
     strip_diacritics,
 )
+
+logger = logging.getLogger(__name__)
 
 AUTO_ACCEPT_SCORE = 90
 UNCERTAIN_MIN_SCORE = 75
@@ -198,6 +201,14 @@ class IngredientCatalogCache:
             self._catalog = await load_ingredient_catalog(self._client)
             self._loaded_at = self._clock()
         return self._catalog
+
+    async def warm_up(self) -> None:
+        """Nạp sẵn lúc khởi động để lượt quét đầu không chờ DB (~650 ms). Lỗi (DB tạm dừng, mất mạng) chỉ cảnh
+        báo: app vẫn chạy, request đầu tiên sẽ tự nạp lại."""
+        try:
+            await self.get()
+        except Exception:  # khởi động không được chết vì danh mục; mọi lỗi đều được log, get() sau thử lại
+            logger.warning("Chưa nạp được danh mục ingredients lúc khởi động — sẽ nạp khi có request", exc_info=True)
 
 
 def catalog_ingredient_from_row(row: dict) -> CatalogIngredient:

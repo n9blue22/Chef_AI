@@ -194,3 +194,58 @@ def test_catalog_cache_reads_db_once_until_expired(monkeypatch: pytest.MonkeyPat
     now[0] = 300.0
     assert asyncio.run(cache.get()) == catalog
     assert loads == ["db", "db"]  # hết hạn → đọc lại đúng 1 lần
+
+
+def test_warm_up_loads_catalog_so_first_request_skips_db(monkeypatch: pytest.MonkeyPatch) -> None:
+    loads: list[object] = []
+
+    async def fake_load(client: object) -> list[CatalogIngredient]:
+        loads.append(client)
+        return []
+
+    monkeypatch.setattr(ingredient_normalizer, "load_ingredient_catalog", fake_load)
+    cache = IngredientCatalogCache(client="db")
+    asyncio.run(cache.warm_up())
+    asyncio.run(cache.get())
+    assert loads == ["db"]
+
+
+def test_warm_up_failure_only_warns_and_next_get_retries(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture,
+) -> None:
+    db_up = [False]
+
+    async def flaky_load(client: object) -> list[CatalogIngredient]:
+        if not db_up[0]:
+            raise ConnectionError("Supabase đang tạm dừng")
+        return [CatalogIngredient(id=GARLIC_ID, name_vi="Tỏi", name_en="Garlic")]
+
+    monkeypatch.setattr(ingredient_normalizer, "load_ingredient_catalog", flaky_load)
+    cache = IngredientCatalogCache(client="db")
+    asyncio.run(cache.warm_up())  # không ném lỗi
+    assert "Chưa nạp được danh mục" in caplog.text
+
+    db_up[0] = True
+    assert [i.id for i in asyncio.run(cache.get())] == [GARLIC_ID]  # quay về nạp lười
+
+
+def test_app_starts_even_when_catalog_preload_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    from fastapi.testclient import TestClient
+
+    from app import main
+
+    async def no_client(settings: object) -> None:
+        return None
+
+    async def fake_ai_services(*args: object) -> None:
+        return None  # không nạp bge-m3 / không dựng client Gemini thật
+
+    async def db_down(client: object) -> list[CatalogIngredient]:
+        raise ConnectionError("mất mạng")
+
+    monkeypatch.setattr(main, "create_supabase_client", no_client)
+    monkeypatch.setattr(main, "create_admin_client", no_client)
+    monkeypatch.setattr(main, "create_ai_services", fake_ai_services)
+    monkeypatch.setattr(ingredient_normalizer, "load_ingredient_catalog", db_down)
+    with TestClient(main.create_app(main.get_settings())) as client:  # chạy lifespan
+        assert isinstance(client.app.state.catalog, IngredientCatalogCache)
