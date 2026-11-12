@@ -1,8 +1,8 @@
 """Đánh giá giai đoạn 1: chạy cases.json qua normalizer → bge-m3 → search_recipes (RPC thật), kiểm chéo dị ứng /
-chế độ ăn bằng dữ liệu đọc thẳng từ bảng, đo thời gian nhúng + tìm.
+chế độ ăn bằng dữ liệu đọc thẳng từ bảng, đo thời gian, đo độ ổn định khi đảo thứ tự nguyên liệu.
 
 Chỉ đọc DB. Không gọi Groq/Gemini/Cloudflare, không gọi /recipes/suggest. Cấu hình nạp qua app (app.core.config).
-Kết quả: scripts/eval/out/phase1-<giờ>.jsonl, summary-<giờ>.md (thư mục out/ bị gitignore).
+Kết quả: scripts/eval/out/phase1-<giờ>.jsonl, order-<giờ>.jsonl, summary-<giờ>.md (thư mục out/ bị gitignore).
 Chạy (cwd = backend): venv\\Scripts\\python.exe -m scripts.eval.run_phase1
 """
 
@@ -37,6 +37,7 @@ from scripts.eval.phase1_checks import (  # noqa: E402
     allergen_leak_reasons,
     diet_violation_reasons,
     guess_slugs,
+    order_agreement,
     raw_name_allergen_warnings,
     recipe_coverage,
     recipe_facts_from_row,
@@ -48,6 +49,8 @@ from scripts.eval.phase1_report import Record, render_summary  # noqa: E402
 EVAL_DIR = Path(__file__).resolve().parent
 CASES_PATH = EVAL_DIR / "cases.json"
 OUT_DIR = EVAL_DIR / "out"
+ORDER_CASE_COUNT = 20
+MIN_ORDER_INGREDIENTS = 4
 WARM_UP_TEXT = "Nguyên liệu: Cà chua, Tomato"  # lượt embed đầu nạp model, không tính vào số đo
 INGREDIENT_ALLERGEN_COLUMNS = "id,ingredient_allergens(allergens(slug))"
 RECIPE_FACT_COLUMNS = (
@@ -154,20 +157,36 @@ async def evaluate_case(case: dict[str, Any], context: EvalContext) -> Record:
     return record
 
 
+async def evaluate_order(record: Record, context: EvalContext) -> Record:
+    """Tìm lại với nguyên liệu đảo thứ tự; so top-K theo id và theo vị trí."""
+    reversed_ids = list(reversed(record["accepted_ids"]))
+    hits, _, _ = await timed_search(context, reversed_ids, record["diet"], record["allergens"])
+    original = [hit["recipe_id"] for hit in record["hits"]]
+    reordered = [hit.recipe_id for hit in hits]
+    same_ids, same_ranks = order_agreement(original, reordered)
+    return {
+        "case_id": record["case_id"], "ingredient_count": len(reversed_ids), "original": original,
+        "reversed": reordered, "same_ids": same_ids, "same_ranks": same_ranks,
+    }
+
+
 def write_jsonl(path: Path, records: list[Record]) -> None:
     """Mỗi bản ghi 1 dòng, giữ tiếng Việt."""
     path.write_text("".join(json.dumps(record, ensure_ascii=False) + "\n" for record in records), encoding="utf-8")
 
 
 async def main() -> None:
-    """Chạy hết các ca; ghi out/ và in tóm tắt."""
+    """Chạy hết 40 ca, rồi 20 ca đầu có ≥ 4 nguyên liệu đã khớp cho phép đo thứ tự; ghi out/ và in tóm tắt."""
     cases = json.loads(CASES_PATH.read_text(encoding="utf-8"))
     context = await build_context()
     records = [await evaluate_case(case, context) for case in cases]
+    order_candidates = [r for r in records if len(r["accepted_ids"]) >= MIN_ORDER_INGREDIENTS][:ORDER_CASE_COUNT]
+    order_records = [await evaluate_order(record, context) for record in order_candidates]
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     OUT_DIR.mkdir(exist_ok=True)
     write_jsonl(OUT_DIR / f"phase1-{stamp}.jsonl", records)
-    summary = render_summary(records)
+    write_jsonl(OUT_DIR / f"order-{stamp}.jsonl", order_records)
+    summary = render_summary(records, order_records)
     (OUT_DIR / f"summary-{stamp}.md").write_text(summary, encoding="utf-8")
     print(summary)
 

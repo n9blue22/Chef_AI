@@ -7,6 +7,7 @@ from typing import Any
 from scripts.eval.phase1_checks import ALLERGEN_SLUGS, TOP_K, percent
 
 DIETS = ("omnivore", "vegetarian", "vegan")
+WORST_ORDER_CASES = 5
 Record = dict[str, Any]
 
 
@@ -115,7 +116,31 @@ def timing_table(records: list[Record]) -> list[str]:
     return lines
 
 
-def render_summary(records: list[Record]) -> str:
+def order_lines(order_records: list[Record]) -> list[str]:
+    """Tỉ lệ top-K giống nhau khi đảo thứ tự nguyên liệu + các ca lệch nhiều nhất."""
+    total = len(order_records)
+    same_set = sum(record["same_ids"] == 1.0 for record in order_records)
+    same_rank = sum(record["same_ranks"] == 1.0 for record in order_records)
+    lines = [
+        f"- Ca đo: {total}",
+        f"- Top-{TOP_K} cùng tập món (theo id): {percent(same_set, total)}; "
+        f"trung bình {mean_of(record['same_ids'] for record in order_records)} id trùng",
+        f"- Top-{TOP_K} cùng thứ hạng (mọi vị trí): {percent(same_rank, total)}; "
+        f"trung bình {mean_of(record['same_ranks'] for record in order_records)} vị trí trùng",
+        "",
+        "| Ca | Số nguyên liệu | id trùng | vị trí trùng | Top gốc | Top đảo |",
+        "|---|---|---|---|---|---|",
+    ]
+    worst = sorted(order_records, key=lambda record: (record["same_ids"], record["same_ranks"]))[:WORST_ORDER_CASES]
+    lines += [
+        f"| {record['case_id']} | {record['ingredient_count']} | {record['same_ids']:.2f} | {record['same_ranks']:.2f} "
+        f"| {record['original']} | {record['reversed']} |"
+        for record in worst
+    ]
+    return lines
+
+
+def render_summary(records: list[Record], order_records: list[Record]) -> str:
     """Toàn bộ phần số liệu của báo cáo."""
     sections = [
         ("Dị ứng theo loại", allergen_table(records)),
@@ -125,5 +150,6 @@ def render_summary(records: list[Record]) -> str:
         (f"Ca trả ít hơn {TOP_K} món", short_result_table(records)),
         ("Số món và độ phủ", coverage_lines(records)),
         ("Thời gian phía backend", timing_table(records)),
+        ("Đảo thứ tự nguyên liệu", order_lines(order_records)),
     ]
     return "\n\n".join(f"### {title}\n\n" + "\n".join(lines) for title, lines in sections) + "\n"

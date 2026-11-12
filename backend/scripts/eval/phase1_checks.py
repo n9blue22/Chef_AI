@@ -1,4 +1,4 @@
-"""Phép kiểm thuần (không I/O) cho bộ đánh giá giai đoạn 1: dị ứng lọt, sai chế độ ăn, độ phủ và độ phủ.
+"""Phép kiểm thuần (không I/O) cho bộ đánh giá giai đoạn 1: dị ứng lọt, sai chế độ ăn, độ phủ, độ ổn định theo thứ tự.
 
 Dữ liệu món lấy độc lập với RPC search_recipes (đọc thẳng bảng), nên đây là kiểm tra chéo bộ lọc SQL.
 """
@@ -119,6 +119,16 @@ def user_usage(recipe: RecipeFacts, user_ids: set[int], pantry_basic_ids: set[in
         return None
     used = {item.ingredient_id for item in recipe.ingredients}
     return len(own & used) / len(own)
+
+
+def order_agreement(original: list[int], reordered: list[int]) -> tuple[float, float]:
+    """(tỉ lệ id trùng, tỉ lệ vị trí trùng) giữa 2 top-K; cả hai rỗng = giống hệt (1.0, 1.0)."""
+    size = max(len(original), len(reordered))
+    if size == 0:
+        return 1.0, 1.0
+    same_ids = len(set(original) & set(reordered)) / size
+    same_ranks = sum(a == b for a, b in zip(original, reordered)) / size
+    return same_ids, same_ranks
 
 
 def percent(part: int, whole: int) -> str:
