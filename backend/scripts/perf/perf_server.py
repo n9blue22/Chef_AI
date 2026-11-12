@@ -141,7 +141,7 @@ from app.services import recipe_repository  # noqa: E402
 ai.prepare_image_for_vision = stage("prepare_image(Pillow)", ai.prepare_image_for_vision)
 ingredient_normalizer.load_ingredient_catalog = stage("load_catalog(DB)", ingredient_normalizer.load_ingredient_catalog)
 ingredient_normalizer.IngredientCatalogCache.get = stage("catalog(cache)", ingredient_normalizer.IngredientCatalogCache.get)
-ai.recognize_ingredients = stage("recognize_ingredients(total vision+normalize)", ai.recognize_ingredients)
+ai.recognize_with_cache = stage("recognize_with_cache(total quota+vision+normalize)", ai.recognize_with_cache)
 gemini.GeminiVisionProvider.detect_ingredients = stage("gemini_vision", gemini.GeminiVisionProvider.detect_ingredients)
 ingredient_normalizer.IngredientNormalizer.__init__ = stage("normalizer_build", ingredient_normalizer.IngredientNormalizer.__init__)
 ingredient_normalizer.IngredientNormalizer.normalize = stage("normalize", ingredient_normalizer.IngredientNormalizer.normalize)
