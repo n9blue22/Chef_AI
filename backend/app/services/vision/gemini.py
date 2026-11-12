@@ -1,5 +1,8 @@
 """VisionProvider dùng Gemini (google-genai SDK), ép output JSON theo schema Detected."""
 
+import hashlib
+import json
+
 import httpx
 from google.genai import errors, types
 
@@ -16,6 +19,14 @@ SYSTEM_PROMPT = """Bạn nhận diện NGUYÊN LIỆU SỐNG trong ảnh để g
 - Ảnh không có thực phẩm nào → cả hai danh sách rỗng. Không bịa."""
 
 USER_PROMPT = "Liệt kê nguyên liệu sống trong ảnh này."
+VERSION_DIGEST_CHARS = 12
+
+
+def gemini_vision_version() -> str:
+    """sha256(model + prompt + schema) rút gọn; đọc lúc gọi nên đổi model/prompt là ra mã mới, không cần nhớ tăng số."""
+    schema = json.dumps(Detected.model_json_schema(), sort_keys=True)
+    material = "\n".join((GEMINI_MODEL, SYSTEM_PROMPT, USER_PROMPT, schema))
+    return hashlib.sha256(material.encode()).hexdigest()[:VERSION_DIGEST_CHARS]
 
 
 class GeminiVisionProvider(VisionProvider):
@@ -43,3 +54,7 @@ class GeminiVisionProvider(VisionProvider):
         if not isinstance(response.parsed, Detected):
             raise VisionUnavailableError(f"Gemini trả về không đúng schema Detected: {response.text!r}")
         return response.parsed
+
+    def output_version(self) -> str:
+        """Xem gemini_vision_version."""
+        return gemini_vision_version()

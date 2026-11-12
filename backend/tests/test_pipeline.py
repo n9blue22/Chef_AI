@@ -352,6 +352,9 @@ class ScriptedVision(VisionProvider):
             raise self.output
         return self.output
 
+    def output_version(self) -> str:
+        return "scripted"
+
 
 CATALOG = [CatalogIngredient(id=CHICKEN_ID, name_vi="Ức gà", name_en="Chicken breast"),
            CatalogIngredient(id=16, name_vi="Tỏi", name_en="Garlic")]

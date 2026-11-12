@@ -33,12 +33,18 @@ class FakeVision(VisionProvider):
     def __init__(self, output: Detected | Exception) -> None:
         self.output = output
         self.received: bytes | None = None
+        self.calls = 0
+        self.version = "fake-v1"
 
     async def detect_ingredients(self, image: bytes, mime_type: str) -> Detected:
         self.received = image
+        self.calls += 1
         if isinstance(self.output, Exception):
             raise self.output
         return self.output
+
+    def output_version(self) -> str:
+        return self.version
 
 
 class FakeImageGen(ImageGenProvider):

@@ -28,3 +28,7 @@ class VisionProvider(ABC):
 
         Raise VisionUnavailableError khi không nhận diện được (không trả rỗng giả).
         """
+
+    @abstractmethod
+    def output_version(self) -> str:
+        """Mã đổi mỗi khi output có thể đổi (model, prompt, schema) — làm khoá cache kết quả quét."""
