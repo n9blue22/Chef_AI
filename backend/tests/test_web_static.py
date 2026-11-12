@@ -11,7 +11,7 @@ from app.api.deps import get_rate_limiter
 from app.api.v1 import health
 from app.core.config import get_settings
 from app.core.web_static import CACHE_IMMUTABLE, CACHE_REVALIDATE, mount_web
-from app.main import PROCESS_TIME_HEADER, create_app
+from app.main import CACHE_HEADER, PROCESS_TIME_HEADER, create_app
 from app.services.rate_limit import RateLimiter
 
 INDEX_HTML = "<!doctype html><title>Chef AI</title><div id=root></div>"
@@ -109,7 +109,8 @@ def test_without_build_nothing_is_mounted(tmp_path: Path) -> None:
 def test_api_responses_carry_process_time_header_readable_by_browser(client: TestClient, path: str) -> None:
     response = client.get(path, headers={"Origin": "http://localhost:8081"})  # DEV_FRONTEND_URL, luôn trong CORS
     assert float(response.headers[PROCESS_TIME_HEADER]) >= 0
-    assert PROCESS_TIME_HEADER.lower() in response.headers["access-control-expose-headers"].lower()
+    exposed = response.headers["access-control-expose-headers"].lower()
+    assert PROCESS_TIME_HEADER.lower() in exposed and CACHE_HEADER.lower() in exposed  # X-Cache: HIT/MISS /recognize
 
 
 def test_web_static_has_no_process_time_header(client: TestClient) -> None:

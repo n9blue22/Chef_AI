@@ -8,7 +8,7 @@ from supabase import AsyncClient
 
 from app.api.deps import limit_ip
 from app.api.errors import register_common_error_handlers
-from app.api.routes.ai import AiServices, register_ai_error_handlers
+from app.api.routes.ai import CACHE_HEADER, AiServices, register_ai_error_handlers
 from app.api.routes.ai import router as ai_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.logs import router as logs_router
@@ -84,8 +84,8 @@ def create_app(settings: Settings) -> FastAPI:
     application.add_middleware(
         CORSMiddleware, allow_origins=list(settings.cors_origins), allow_credentials=True,
         allow_methods=["GET", "POST", "PATCH", "DELETE"], allow_headers=["Authorization", "Content-Type"],
-        # web đọc được số giây chờ khi 429 và thời gian xử lý (mặc định trình duyệt giấu các header này)
-        expose_headers=["Retry-After", PROCESS_TIME_HEADER],
+        # web đọc được số giây chờ khi 429, thời gian xử lý và HIT/MISS của /recognize (mặc định trình duyệt giấu)
+        expose_headers=["Retry-After", PROCESS_TIME_HEADER, CACHE_HEADER],
     )
     application.middleware("http")(add_process_time_header)  # bọc ngoài cùng: cả 404/429 của API cũng có header
     application.include_router(health_router, prefix=API_V1_PREFIX, dependencies=[Depends(limit_ip("default_ip"))])
