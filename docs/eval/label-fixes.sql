@@ -184,7 +184,13 @@ insert into label_fix (recipe_id, slug, title, change) values
   (1677, 'sesame', 'six layer mediterranean dip', 'c-tu-khoa'),
   (1804, 'wheat', 'sweetie pie s mac and cheese', 'c-tu-khoa'),
   (1857, 'wheat', 'the realtor s shrimp scampi w spaghetti', 'c-tu-khoa'),
-  (2703, 'wheat', 'Bánh Bao Lá Dứa Nhân Mặn', 'c-tu-khoa');
+  (2703, 'wheat', 'Bánh Bao Lá Dứa Nhân Mặn', 'c-tu-khoa'),
+  (167, 'peanut', 'barb s best zucchini bread', 'c-tu-khoa'),
+  (457, 'peanut', 'cinnamon coffee cake   kaffeekuchen', 'c-tu-khoa'),
+  (476, 'peanut', 'cocoa oatmeal muffins', 'c-tu-khoa'),
+  (556, 'peanut', 'crumb topped banana muffins', 'c-tu-khoa'),
+  (936, 'peanut', 'high altitude zucchini bread', 'c-tu-khoa'),
+  (1470, 'peanut', 'quick amish friendship bread or muffins  no starter required', 'c-tu-khoa');
 
 do $$
 declare unmatched int;

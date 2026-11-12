@@ -65,6 +65,12 @@ _NON_WHEAT_LOOKALIKE = re.compile(r"\bspaghetti squash\b")
 # Theo từng slug: cụm "trông giống mà không phải", bỏ đi trước khi dò.
 # Chỉ bỏ khi dò đúng slug đó — "sữa đậu nành" vẫn phải ra soy, "bơ đậu phộng" ra peanut.
 _LOOKALIKE_BY_SLUG = {DAIRY_SLUG: _NON_DAIRY_LOOKALIKE, "wheat": _NON_WHEAT_LOOKALIKE}
+# "nuts", "mixed nuts", "chopped nuts": không rõ loại hạt, có thể là đậu phộng → gắn thêm peanut (tree_nuts đã khớp "nut").
+# Tên có loại hạt cụ thể ("pine nuts", "macadamia nuts"...) thì không.
+PEANUT_SLUG = "peanut"
+_GENERIC_NUTS = re.compile(
+    r"(?<!pine )(?<!macadamia )(?<!brazil )(?<!cashew )(?<!pistachio )(?<!pecan )(?<!almond )(?<!betel )\bnuts?\b"
+)
 # "dầu hào chay", "vegetarian worcestershire sauce": bản chay của sản phẩm động vật.
 _VEGETARIAN_VERSION = re.compile(r"\b(?:chay|vegetarian|vegan)\b")
 
@@ -120,4 +126,6 @@ def guess_allergen_ids(names: list[str], allergen_id_by_slug: dict[str, int]) ->
             searched = lookalike.sub(" ", text) if lookalike else text
             if pattern.search(searched):
                 allergen_ids.add(allergen_id_by_slug[slug])
+        if _GENERIC_NUTS.search(text):
+            allergen_ids.add(allergen_id_by_slug[PEANUT_SLUG])
     return allergen_ids

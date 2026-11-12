@@ -33,6 +33,14 @@ Tầng gọi model phải nằm sau interface trừu tượng trong services/.
 
 **Sau mỗi tính năng:**
 - Trước khi báo "xong", tự đọc lại phần vừa viết một lượt: có đơn giản hoá được không, có phần nào thừa không, có tên nào cần đổi không.
+## An toàn khi làm việc — bắt buộc, trừ khi được yêu cầu rõ trong chính lượt đó
+- KHÔNG chạy pytest toàn bộ. Chỉ chạy đúng các file test liên quan tới thay đổi (`pytest tests/test_x.py`).
+- KHÔNG chạy `test_*_real*.py` (chạm DB / dịch vụ thật).
+- KHÔNG ghi DB (Supabase). Cần số liệu thì đọc từ bản dump chỉ-đọc hoặc file CSV trong `backend/data/`.
+- KHÔNG đọc `.env`. Lệnh nào cần secret thì đưa lệnh cho người dùng tự chạy.
+- KHÔNG đăng artifact, KHÔNG tải nội dung repo lên bất kỳ dịch vụ ngoài nào. Báo cáo ghi vào file trong repo.
+- Không gộp vào `main`. Commit trên nhánh đang làm, push cùng nhánh.
+
 ## Git commits
 Không thêm bất kỳ dòng attribution nào (Co-Authored-By, Generated with,
 Claude-Session...) vào commit message. Sau mỗi commit, tự kiểm tra bằng

@@ -77,7 +77,9 @@ def test_vegetarian_version() -> None:
 @pytest.mark.parametrize(("name", "expected"), [
     ("elbow macaroni", {"wheat"}), ("spaghetti", {"wheat"}), ("penne pasta", {"wheat"}),
     ("seasoned croutons", {"wheat"}), ("ritz crackers", {"wheat"}), ("bột bánh bao", {"wheat"}),
-    ("mixed nuts", {"tree_nuts"}), ("pine nut", {"tree_nuts"}), ("nutella", {"tree_nuts", "dairy", "soy"}),
+    ("nuts", {"tree_nuts", "peanut"}), ("chopped nuts", {"tree_nuts", "peanut"}), ("mixed nuts", {"tree_nuts", "peanut"}),
+    ("pine nut", {"tree_nuts"}), ("macadamia nuts", {"tree_nuts"}), ("walnuts", {"tree_nuts"}),
+    ("nutella", {"tree_nuts", "dairy", "soy"}),
     ("hummus", {"sesame"}),
     ("mắm ruốc huế", {"shellfish", "fish"}), ("ruốc biển", {"shellfish"}),
 ])

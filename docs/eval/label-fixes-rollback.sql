@@ -181,7 +181,13 @@ using (values
   (1677, 'sesame'),
   (1804, 'wheat'),
   (1857, 'wheat'),
-  (2703, 'wheat')
+  (2703, 'wheat'),
+  (167, 'peanut'),
+  (457, 'peanut'),
+  (476, 'peanut'),
+  (556, 'peanut'),
+  (936, 'peanut'),
+  (1470, 'peanut')
 ) v (recipe_id, slug), public.allergens a
 where a.slug = v.slug and ra.recipe_id = v.recipe_id and ra.allergen_id = a.id;
 
