@@ -338,6 +338,13 @@ Các trường phản hồi (`PantryBatchResult`, luôn đủ 3 trường, kể 
 - **Rate limit + quota:** `/recognize`, `/recipes/suggest`, `/recipes/{id}/image` bắt buộc đăng nhập; ngưỡng ở
   `services/rate_limit.py`, trần tổng/ngày qua env `*_DAILY_CAP` (nâng tạm bằng `*_DAILY_CAP_OVERRIDE` +
   `DAILY_CAP_OVERRIDE_UNTIL`). Bộ đếm theo ngày lưu Postgres (`api_quota_usage`), theo phút/giờ trong RAM (1 instance).
+- **Cache `/recognize` (`services/scan_cache.py`, chi tiết `docs/caching-audit.md`):** lưu đầu ra Gemini (`Detected`)
+  trong RAM theo `(user_id, sha256 bytes ảnh gốc, output_version())` — mã phiên bản băm từ model + prompt + schema nên
+  đổi prompt/model là cache tự mất. LRU 200 mục, TTL 24 h, không lưu ảnh, không dùng chung giữa các user. Trúng vẫn
+  chuẩn hoá lại theo danh mục hiện tại. Thứ tự: hạn mức phút → kiểm ảnh (413/415, không mất lượt) → tra cache; trúng
+  không trừ lượt ngày (`X-Cache: HIT`), trượt thì trừ lượt rồi mới gọi Gemini, Gemini lỗi vẫn mất lượt (`X-Cache: MISS`).
+  Lỗi, kết quả rỗng hoặc không khớp danh mục không vào cache. **Chấp nhận:** user đã hết lượt ngày quét lại đúng ảnh cũ
+  vẫn nhận kết quả (không tốn Gemini); 2 request cùng ảnh đồng thời đều trượt và cùng trừ lượt.
 - **Giới hạn gói Supabase Free (lên Pro mới giải quyết triệt để):** kiểm tra mật khẩu rò rỉ (HIBP) chạy ở backend nên
   đăng ký thẳng qua Supabase Auth bỏ qua được; session 30 ngày ép ở client (web: cookie refresh hết hạn 30 ngày),
   Supabase vẫn giữ refresh token tới khi đăng xuất; email xác minh cần SMTP riêng trước khi có user thật.
@@ -474,8 +481,8 @@ suggest` (tài khoản tạm, tự xoá) → `perf_summary.py <log>`. Trung vị
   từng request, client dùng chung không có header mặc định. Test `test_user_db_isolation_real.py`: 2 user + 1 token sai
   gọi song song 12 vòng, không ai thấy dữ liệu người khác. Nghẽn event loop >30 ms: 42 lần ở phiên đo gốc (có nhiều request hơn) → 1–4 lần ở mỗi phiên đo sau khi sửa.
 - **Cache danh mục `ingredients` (`IngredientCatalogCache`, 300 s):** seed chạy ở tiến trình riêng nên server thấy
-  danh mục mới chậm nhất sau 300 s; muốn thấy ngay thì khởi động lại backend. Lượt đầu sau khởi động vẫn đọc DB
-  (~650 ms); có thể nạp trước trong lifespan nếu cần.
+  danh mục mới chậm nhất sau 300 s; muốn thấy ngay thì khởi động lại backend. Nạp sẵn trong `lifespan`
+  (`IngredientCatalogCache.warm_up`); DB tạm dừng / mất mạng lúc khởi động chỉ ghi cảnh báo, request đầu tự nạp lại.
 - **Kết nối trong pool khi backend rảnh (`app/core/http_pool.py`, đo 2026-10-02 bằng `perf_client.py idle`):**
   - Trước: httpx tự đóng kết nối rảnh sau `keepalive_expiry` = 5 s (mặc định) → request đầu sau mỗi khoảng nghỉ > 5 s
     mở TCP + TLS mới tới Sydney (~0,5–1 s). Rảnh 370 s: lượt đầu 1263 ms, không lỗi kết nối.
