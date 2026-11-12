@@ -9,10 +9,10 @@ from app.main import app
 from app.services.auth_tokens import CurrentUser
 from app.services.rate_limit import POLICIES, RateLimiter
 from app.services.vision.provider import Detected, VisionUnavailableError
-from test_ai_routes import (  # noqa: F401 — no_db là fixture autouse: không đọc danh mục từ DB
-    CHICKEN_ID, TEST_USER, FakeLimiter, FakeVision, client_with, image_bytes, no_db, post_image,
-)
+from test_ai_routes import CHICKEN_ID, TEST_USER, FakeLimiter, FakeVision, client_with, image_bytes, post_image
+import test_ai_routes
 
+no_db = test_ai_routes.no_db  # fixture autouse dùng chung: danh mục giả, không đọc DB, dọn override sau test
 CHICKEN = Detected(ingredients=["ức gà"], uncertain=[])
 OTHER_USER = CurrentUser(id="00000000-0000-0000-0000-00000000000b", access_token="test-token-b")
 
