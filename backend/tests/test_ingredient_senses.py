@@ -72,3 +72,20 @@ def test_vegetarian_version() -> None:
     assert is_vegetarian_version("dầu hào chay")
     assert is_vegetarian_version("vegetarian worcestershire sauce")
     assert not is_vegetarian_version("dầu hào")
+
+
+@pytest.mark.parametrize(("name", "expected"), [
+    ("elbow macaroni", {"wheat"}), ("spaghetti", {"wheat"}), ("penne pasta", {"wheat"}),
+    ("seasoned croutons", {"wheat"}), ("ritz crackers", {"wheat"}), ("bột bánh bao", {"wheat"}),
+    ("mixed nuts", {"tree_nuts"}), ("pine nut", {"tree_nuts"}), ("nutella", {"tree_nuts", "dairy", "soy"}),
+    ("hummus", {"sesame"}),
+    ("mắm ruốc huế", {"shellfish", "fish"}), ("ruốc biển", {"shellfish"}),
+])
+def test_added_allergen_keywords(name: str, expected: set[str]) -> None:
+    assert _slugs([name]) == expected
+
+
+@pytest.mark.parametrize("name", ["spaghetti squash", "peanuts", "coconut milk", "nutmeg", "butternut squash", "ruốc sấy"])
+def test_added_keywords_skip_lookalikes(name: str) -> None:
+    """Bí spaghetti không phải mì; peanut/coconut/nutmeg không phải hạt cây; "ruốc" trơn (chà bông) không phải tôm."""
+    assert not _slugs([name]) & {"wheat", "tree_nuts", "shellfish"}
