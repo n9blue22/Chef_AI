@@ -38,7 +38,7 @@ Script `diet_audit.py` để ở scratchpad, không đưa vào repo.
 
 #120, #625, #1295 là việc 1; **#1628 là món mới tìm thấy** khi rà, đã thêm vào cùng file SQL và rollback.
 
-## 2. Chờ anh duyệt (KHÔNG có trong SQL)
+## 2. Chờ anh duyệt (KHÔNG có trong SQL) — cập nhật: #1041, #1274 đã chuyển vào SQL, xem mục 5
 
 | id | Tên | diet_type | Từ khoá khớp | Nguyên liệu đã map | Vì sao chưa chắc |
 |---|---|---|---|---|---|
@@ -81,3 +81,33 @@ Bánh da lợn / da heo — #2284, 2560, 2786, 2788, 2791 (heo/lợn); #2217 Bá
 - `meat` → `Cơm dừa` là lỗi map tên, không phải lỗi nhãn. Ở món chay chỉ gặp #1628 và #1274; món `omnivore` có thể cũng bị
   (không ảnh hưởng chế độ ăn, nhưng sai nguyên liệu và độ phủ). Em chưa rà phần này.
 - Rà theo từ khoá không bắt được món map nhầm mà cả tên món lẫn tên nguồn đều không có từ khoá (vd tên cá lạ ngoài danh sách).
+
+## 5. Đọc kỹ 3 món chờ duyệt (2026-11-13)
+
+Nguồn: CSV, đọc đủ nguyên liệu và mọi bước nấu.
+
+### #1041 kittencal s egg or tuna and olive salad sandwiches · vegetarian · foodcom 97601
+- Nguyên liệu nguồn: hard-boiled eggs, green onions, seasoning salt, stuffed green olive, mayonnaise, fresh ground black pepper, cayenne pepper, bread, lettuce, tomatoes.
+- Bước: 1. slice the cooked eggs using an egg slicer or coarsely chop using a fork **or flake the tuna** in a bowl using a fork ·
+  2. add in all remaining ingredients · 3. lightly mix with a large spatula or spoon until combined ·
+  4. cover and refrigerate for 2 or more hours to blend the flavors · 5. divide the mixture to make sandwiches.
+- Kết luận: các bước nấu có cá ngừ là một lựa chọn → anh chốt đổi sang `omnivore` và giữ nhãn `fish`.
+
+### #1274 okonomi yaki  veggie pancakes · vegetarian · foodcom 38400
+- Nguyên liệu nguồn: green cabbage, carrot, onion, celery, whole wheat flour, egg, brown sugar, salt, evaporated milk, water, **meat**.
+- Bước: 1. mix together the veggies · 2. mix together the remaining ingredients to form a smooth, pourable batter ·
+  3. mix the veggies in the batter … adjust with either water or flour · 4. on a heated sprayed with oil skillet drop spoonfuls of batter ·
+  5. your heat should be medium · 6. brown well on one side flip and brown on the other · 7. serve hot or cold.
+- Kết luận: các bước không nhắc tới thịt, nhưng nguyên liệu có `meat` (bước 2 "remaining ingredients") → anh chốt đổi sang `omnivore`.
+
+### #2034 Bánh sen chiên giòn · vegetarian · vifoodrec-136 (CHƯA đưa vào SQL)
+- Nguyên liệu nguồn: củ sen non, hạt sen, mè đen, húng lũi, nước cốt chanh, tỏi, ớt, tỏi phi, tương ớt, tương cà, dầu ăn,
+  **bột giòn hải sản**, xốt mayonnaise aji mayo vị nguyên bản.
+- Bước: 1. Đun nóng dầu ăn, múc 1 miếng củ sen và xếp vài hạt sen lên trên, cho bánh vào chảo dầu trở đều hai mặt đến khi chín
+  vàng, vớt ra để ráo dầu. · 2. Pha xốt chấm: 3 muỗng xốt Mayonnaise Aji-Mayo, 1 muỗng nước chanh, 1 muỗng tương ớt, 1/2 muỗng tương cà.
+- "Bột giòn hải sản" là **Aji-Quick Bột Chiên Giòn Hải Sản** (Ajinomoto): trong ViFoodRec có 60 công thức dùng loại bột này, và các
+  bước nấu gọi đúng tên đó. Bột được dùng để tẩm tôm, cá, sườn, cánh gà, đậu hũ, chả nấm. Vậy "hải sản" là **món nên dùng bột này**,
+  không phải thành phần của bột.
+- Thành phần: trang Ajinomoto Việt Nam chỉ nêu chung cho dòng Aji-Quick là tinh bột, bột mì, bột bắp, vụn bánh mì, hành, tỏi…,
+  **không có bảng thành phần riêng cho loại Hải Sản**. Không thấy nguồn nào nói bột có hải sản thật, nhưng cũng **chưa xác nhận**
+  được (cần xem nhãn bao bì). Món đã có nhãn `wheat` qua `Bột mì`. Đề xuất giữ `vegetarian`, chờ anh quyết.
