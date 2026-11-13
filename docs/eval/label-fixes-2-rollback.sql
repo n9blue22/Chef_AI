@@ -1,14 +1,15 @@
 -- Hoàn tác docs/eval/label-fixes-2.sql: gỡ nhãn fish của #1041 và trả diet_type về đúng giá trị lúc dump (2026-11-13).
 -- Lúc dump #1041 chưa có fish, nên xoá cặp này không đụng nhãn cũ (trừ khi nhãn được thêm bằng đường khác sau ngày dump).
 -- Chỉ trả diet_type khi giá trị hiện tại đúng là giá trị label-fixes-2.sql đã đặt.
--- Số dòng kỳ vọng: DELETE recipe_allergens = 1, UPDATE recipes = 3. Lệch là huỷ cả giao dịch.
+-- Số dòng kỳ vọng: DELETE recipe_allergens = 1, UPDATE recipes = 4. Lệch là huỷ cả giao dịch.
 begin;
 
 create temp table diet_fix (recipe_id bigint, title text, old_diet text, new_diet text) on commit drop;
 insert into diet_fix (recipe_id, title, old_diet, new_diet) values
   (120, 'baked parmesan fish', 'vegetarian', 'omnivore'),
   (625, 'easy baked orange roughy', 'vegetarian', 'omnivore'),
-  (1295, 'orange roughy with dill sauce', 'vegetarian', 'omnivore');
+  (1295, 'orange roughy with dill sauce', 'vegetarian', 'omnivore'),
+  (1628, 'scandinavian hash  biksemad', 'vegetarian', 'omnivore');
 
 do $$
 declare

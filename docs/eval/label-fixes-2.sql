@@ -1,11 +1,12 @@
 -- Đợt sửa 2, theo bản dump chỉ-đọc 2026-11-13 (xem docs/eval/label-fixes-proof.md mục 1 và 3).
 -- (a) #1041: thêm nhãn fish (món cho chọn trứng HOẶC cá ngừ; đợt 1 bỏ sót).
--- (b) đổi diet_type vegetarian → omnivore cho món chắc chắn có cá/thịt.
+-- (b) đổi diet_type vegetarian → omnivore cho món chắc chắn có cá/thịt: #120, #625, #1295 (orange roughy → Cam),
+--     #1628 (`meat` → Cơm dừa; thêm sau khi rà docs/eval/diet-audit.md).
 --     Schema: recipes.diet_type là text + CHECK (diet_type in ('omnivore', 'vegetarian', 'vegan'))
 --     (supabase/migrations/20260924151448_create_core_schema.sql). Không có giá trị "pescatarian":
 --     món có cá/thịt chỉ được là 'omnivore'.
 -- Mọi dòng đối chiếu id + tên món (+ diet_type cũ với (b)). Lệch số dòng kỳ vọng là huỷ cả giao dịch.
--- Số dòng kỳ vọng: INSERT recipe_allergens = 1, UPDATE recipes = 3.
+-- Số dòng kỳ vọng: INSERT recipe_allergens = 1, UPDATE recipes = 4.
 -- Chạy lại sau khi đã áp: số dòng = 0 → báo lỗi và huỷ (không đổi gì).
 -- Hoàn tác: docs/eval/label-fixes-2-rollback.sql. Kiểm trước/sau: docs/eval/label-fixes-2-verify.sql.
 begin;
@@ -14,7 +15,8 @@ create temp table diet_fix (recipe_id bigint, title text, old_diet text, new_die
 insert into diet_fix (recipe_id, title, old_diet, new_diet) values
   (120, 'baked parmesan fish', 'vegetarian', 'omnivore'),
   (625, 'easy baked orange roughy', 'vegetarian', 'omnivore'),
-  (1295, 'orange roughy with dill sauce', 'vegetarian', 'omnivore');
+  (1295, 'orange roughy with dill sauce', 'vegetarian', 'omnivore'),
+  (1628, 'scandinavian hash  biksemad', 'vegetarian', 'omnivore');
 
 do $$
 declare
