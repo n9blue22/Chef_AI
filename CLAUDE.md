@@ -37,6 +37,7 @@ Tầng gọi model phải nằm sau interface trừu tượng trong services/.
 - KHÔNG chạy pytest toàn bộ. Chỉ chạy đúng các file test liên quan tới thay đổi (`pytest tests/test_x.py`).
 - KHÔNG chạy `test_*_real*.py` (chạm DB / dịch vụ thật).
 - KHÔNG ghi DB (Supabase). Cần số liệu thì đọc từ bản dump chỉ-đọc hoặc file CSV trong `backend/data/`.
+- KHÔNG nạp lại DB (seed) khi chưa được yêu cầu. Buộc phải nạp lại thì làm theo `docs/eval/RESEED.md`.
 - KHÔNG đọc `.env`. Lệnh nào cần secret thì đưa lệnh cho người dùng tự chạy.
 - KHÔNG đăng artifact, KHÔNG tải nội dung repo lên bất kỳ dịch vụ ngoài nào. Báo cáo ghi vào file trong repo.
 - Không gộp vào `main`. Commit trên nhánh đang làm, push cùng nhánh.
