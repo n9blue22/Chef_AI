@@ -3,7 +3,7 @@
 -- Giá trị "trước" lấy từ bản dump chỉ-đọc 2026-11-13.
 
 -- 1. Từng món: id + tên khớp, diet_type, có nhãn fish chưa.
---    Trước: 120/625/1295/1628 = vegetarian; sau: = omnivore. 1041 giữ vegetarian.
+--    Trước: cả 6 món = vegetarian; sau: cả 6 = omnivore.
 --    #1041 có_fish: trước = false, sau = true. #120/625/1295 đã có fish từ đợt 1 (cả trước lẫn sau = true).
 select
   v.recipe_id,
@@ -22,26 +22,27 @@ from (values
   (625,  'easy baked orange roughy',                          'vegetarian', 'omnivore',   true,  true),
   (1295, 'orange roughy with dill sauce',                     'vegetarian', 'omnivore',   true,  true),
   (1628, 'scandinavian hash  biksemad',                       'vegetarian', 'omnivore',   false, false),
-  (1041, 'kittencal s egg or tuna and olive salad sandwiches', 'vegetarian', 'vegetarian', false, true)
+  (1041, 'kittencal s egg or tuna and olive salad sandwiches', 'vegetarian', 'omnivore',   false, true),
+  (1274, 'okonomi yaki  veggie pancakes',                     'vegetarian', 'omnivore',   false, false)
 ) v (recipe_id, title, diet_truoc, diet_sau, fish_truoc, fish_sau)
 left join public.recipes r on r.id = v.recipe_id
 order by v.recipe_id;
 
 -- 2. Tổng: số món theo diet_type và tổng số dòng recipe_allergens.
 --    Trước: omnivore 1852, vegetarian 851, vegan 468; recipe_allergens 5623 (= 5439 lúc dump + 184 của đợt 1).
---    Sau:   omnivore 1856, vegetarian 847, vegan 468; recipe_allergens 5624 (tăng đúng 1).
+--    Sau:   omnivore 1858, vegetarian 845, vegan 468; recipe_allergens 5624 (tăng đúng 1).
 select diet_type, count(*) as so_mon from public.recipes group by diet_type order by diet_type;
 select count(*) as recipe_allergens_rows from public.recipe_allergens;
 
--- 3. Mọi nhãn hiện có của 5 món (đọc bằng mắt: sau khi áp, chỉ #1041 có thêm fish).
+-- 3. Mọi nhãn hiện có của 6 món (đọc bằng mắt: sau khi áp, chỉ #1041 có thêm fish).
 select ra.recipe_id, string_agg(a.slug, ', ' order by a.slug) as nhan
 from public.recipe_allergens ra join public.allergens a on a.id = ra.allergen_id
-where ra.recipe_id in (120, 625, 1041, 1295, 1628)
+where ra.recipe_id in (120, 625, 1041, 1274, 1295, 1628)
 group by ra.recipe_id
 order by ra.recipe_id;
 
 -- 4. Món chay/thuần chay mà mang nhãn fish (tính trên dump + đợt 1).
---    Trước: đúng 3 dòng #120, #625, #1295. Sau: đúng 1 dòng #1041 (cố ý giữ vegetarian, xem diet-audit.md mục 2).
+--    Trước: đúng 3 dòng #120, #625, #1295. Sau: RỖNG (0 dòng).
 select r.id, r.title, r.diet_type
 from public.recipes r
 where r.diet_type in ('vegetarian', 'vegan')
