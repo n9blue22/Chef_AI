@@ -188,6 +188,7 @@ async def main() -> None:
     write_jsonl(OUT_DIR / f"order-{stamp}.jsonl", order_records)
     summary = render_summary(records, order_records)
     (OUT_DIR / f"summary-{stamp}.md").write_text(summary, encoding="utf-8")
+    sys.stdout.reconfigure(encoding="utf-8")  # console Windows mặc định cp1252 → print tiếng Việt lỗi UnicodeEncodeError
     print(summary)
 
 
