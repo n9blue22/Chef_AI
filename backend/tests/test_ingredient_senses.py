@@ -58,6 +58,8 @@ def test_nut_butter_and_avocado_are_not_animal_derived() -> None:
     ("tỏi tép", False), ("tép tỏi", False), ("tép cam", False), ("tép khô", True),
     ("lòng đỏ trứng", False), ("lòng trắng trứng gà", False), ("lòng bò", True), ("trứng cá", True),
     ("gân bò", True), ("cá cam", True), ("cải bó xôi", False),
+    ("meat", True), ("ground meat", True), ("minced meat", True), ("orange roughy fillets", True), ("haddock", True),
+    ("sea bass fillets", True), ("coconut meat", False), ("young coconut meat", False), ("meatless sauce", False),
 ])
 def test_mentions_meat(name: str, expected: bool) -> None:
     assert mentions_meat(name) is expected

@@ -39,6 +39,8 @@ MEAT_KEYWORDS = (
     "sò", "hàu", "ốc", "hến", "mắm", "xương", "sườn", "giò", "chả", "lạp xưởng", "pate", "huyết", "lòng",
     "beef", "pork", "chicken", "turkey", "duck", "lamb", "bacon", "ham", "sausage", "fish", "salmon", "tuna",
     "shrimp", "prawn", "crab", "anchovy", "anchovies", "gelatin", "lard",
+    # "meat" khớp mờ sang Cơm dừa (name_en "Coconut meat"); "orange roughy" sang Cam. Xem docs/eval/mapping-errors.md.
+    "meat", "ground meat", "minced meat", "roughy", "haddock", "sea bass",
 )
 ANIMAL_DERIVED_KEYWORDS = (
     "trứng", "sữa", "bơ", "phô mai", "kem", "mật ong", "egg", "milk", "cheese", "butter", "cream", "honey", "yogurt",
@@ -47,6 +49,8 @@ ANIMAL_DERIVED_KEYWORDS = (
 # --- Từ đa nghĩa -------------------------------------------------------------------------------------------
 # "lòng đỏ trứng", "trứng gà": có chữ lòng/gà/vịt nhưng là trứng, không phải thịt/lòng (nội tạng).
 _EGG_PHRASE = re.compile(r"\b(?:lòng (?:đỏ|trắng) )?trứng(?: (?:gà|vịt|cút|muối))?\b")
+# "coconut meat" là cơm dừa, không phải thịt — phải vẫn khớp được Cơm dừa.
+_NON_MEAT_LOOKALIKE = re.compile(r"\bcoconut meat\b")
 # "tỏi tép", "tép cam": tép = tép tỏi / múi cam, không phải con tép.
 _SEGMENT_TEP = re.compile(r"\btỏi tép\b|\btép (?:tỏi|cam|bưởi|chanh|quýt)\b")
 # Không phải sữa bò: sữa/kem thực vật, bơ hạt (peanut butter), quả bơ (avocado).
@@ -100,8 +104,9 @@ def is_vegetarian_version(name: str) -> bool:
 
 
 def mentions_meat(name: str) -> bool:
-    """Tên nhắc tới thịt/cá/hải sản (đã loại "trứng gà", "tỏi tép"...)."""
-    return bool(_MEAT_PATTERN.search(_EGG_PHRASE.sub(" ", _without_segment_tep(name))))
+    """Tên nhắc tới thịt/cá/hải sản (đã loại "trứng gà", "tỏi tép", "coconut meat"...)."""
+    without_lookalikes = _NON_MEAT_LOOKALIKE.sub(" ", _EGG_PHRASE.sub(" ", _without_segment_tep(name)))
+    return bool(_MEAT_PATTERN.search(without_lookalikes))
 
 
 def mentions_animal_derived(name: str) -> bool:

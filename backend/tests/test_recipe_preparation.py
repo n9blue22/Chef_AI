@@ -14,6 +14,7 @@ from scripts.recipe_preparation import (
     classify_diet,
     is_diet_neutral_basic,
     is_pantry_basic,
+    map_ingredients,
     prepare_recipe,
 )
 from scripts.ingredient_senses import guess_allergen_ids, is_non_dairy_lookalike
@@ -159,3 +160,64 @@ def test_cow_milk_still_maps_and_is_dairy() -> None:
     assert isinstance(result, PreparedRecipe)
     assert result.allergen_ids == {DAIRY_ALLERGEN_ID}
     assert result.diet_type == "vegetarian"
+
+
+# --- "meat" / "orange roughy" khớp mờ sang nguyên liệu chay (docs/eval/mapping-errors.md) --------------------------
+# Tên, name_en, alias lấy đúng như danh mục thật (dump 2026-11-13).
+_REAL_ROWS = [  # (id, name_vi, name_en, aliases, is_vegetarian, is_vegan)
+    (16, "Tỏi", "Garlic", (), True, True),
+    (58, "Cam", "Orange", (), True, True),
+    (59, "Chanh vàng", "Lemon", (), True, True),
+    (60, "Chanh", "Lime", (), True, True),
+    (66, "Cơm dừa", "Coconut meat", (), True, True),
+    (101, "Trứng gà", "Chicken egg", ("Trứng", "Egg"), True, False),
+    (123, "Bơ", "Butter", (), True, False),
+    (124, "Phô mai cheddar", "Cheddar", ("Phô mai", "Cheese"), True, False),
+    (132, "Bột mì", "Wheat flour",
+     ("Flour", "All-purpose flour", "Bột mì đa dụng", "Bột chiên giòn", "Bột giòn"), True, True),
+    (149, "Dầu ô liu", "Olive oil", ("Dầu olive", "Extra virgin olive oil"), True, True),
+    (152, "Đường", "Sugar", (), True, True),
+    (155, "Muối", "Salt", (), True, True),
+    (194, "Thịt xông khói", "Bacon", ("Ba rọi xông khói", "Ba chỉ xông khói"), False, False),
+]
+REAL_CATALOG = Catalog(
+    normalizer=IngredientNormalizer(
+        CatalogIngredient(id=row[0], name_vi=row[1], name_en=row[2], aliases=row[3]) for row in _REAL_ROWS
+    ),
+    diet_flags={row[0]: DietFlags(is_vegetarian=row[4], is_vegan=row[5]) for row in _REAL_ROWS},
+    facts={},
+    allergens_by_ingredient={},
+    allergen_id_by_slug=ALLERGEN_SLUGS,
+)
+_NAME_VI_BY_ID = {row[0]: row[1] for row in _REAL_ROWS}
+
+
+def _mapped_names(source_names: list[str], title: str = "Món thử") -> set[str]:
+    mapping = map_ingredients(source_names, title, {}, REAL_CATALOG)
+    return {_NAME_VI_BY_ID[ingredient_id] for ingredient_id in mapping.grams_by_ingredient}
+
+
+@pytest.mark.parametrize("name", ["meat", "ground meat", "minced meat", "lean ground meat", "stew meat"])
+def test_meat_is_not_mapped_to_a_vegetarian_ingredient(name: str) -> None:
+    mapping = map_ingredients([name], "scandinavian hash  biksemad", {}, REAL_CATALOG)
+    assert mapping.grams_by_ingredient == {} and mapping.unmatched == [name]
+    assert classify_diet(set(), REAL_CATALOG.diet_flags, mapping.unmatched, mapping.fuzzy_matched) == "omnivore"
+
+
+@pytest.mark.parametrize("name", ["coconut meat", "Coconut meat", "young coconut meat", "cơm dừa"])
+def test_coconut_meat_still_maps_to_com_dua(name: str) -> None:
+    assert _mapped_names([name]) == {"Cơm dừa"}
+
+
+@pytest.mark.parametrize("name", ["orange roughy", "orange roughy fillets"])
+def test_orange_roughy_is_not_mapped_to_orange(name: str) -> None:
+    assert _mapped_names([name], "easy baked orange roughy") == set()
+
+
+@pytest.mark.parametrize(("name", "expected"), [
+    ("salt", "Muối"), ("butter", "Bơ"), ("sugar", "Đường"), ("eggs", "Trứng gà"), ("garlic cloves", "Tỏi"),
+    ("all-purpose flour", "Bột mì"), ("lemon juice", "Chanh vàng"), ("cheddar cheese", "Phô mai cheddar"),
+    ("extra virgin olive oil", "Dầu ô liu"), ("bacon", "Thịt xông khói"), ("orange juice", "Cam"),
+])
+def test_common_source_names_keep_their_match(name: str, expected: str) -> None:
+    assert _mapped_names([name]) == {expected}
